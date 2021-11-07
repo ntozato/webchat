@@ -1,7 +1,6 @@
 // Faça seu código aqui
 const express = require('express');
 const cors = require('cors');
-const crypto = require('crypto');
 
 const app = express();
 const http = require('http').createServer(app);
@@ -13,22 +12,38 @@ const io = require('socket.io')(http, {
   },
 });
 
+const chatController = require('./controller/chatController');
+
 app.use(cors());
 
+const onlineUsers = [];
+const date = new Date().toLocaleString().replace(/\//g, '-');
+
 io.on('connection', (socket) => {
-  console.log(`usuário entrou ID: ${socket.id}`);
-  const randomNickName = crypto.randomBytes(8).toString('hex');
-
   socket.on('disconnect', () => {
-    console.log(`${socket.id} saiu`);
+    const userIndex = onlineUsers.findIndex((user) => user.id === socket.id);
+    onlineUsers.splice(userIndex, 1);
+    io.emit('userDisconnected', onlineUsers);
   });
-
-  socket.emit('randomNickname', randomNickName);
-
-  socket.on('message', (msg) => {
-    console.log(msg);
-    const date = new Date().toLocaleString().replace(/\//g, '-');
+  socket.on('message', async (msg) => {
+    await chatController.createMessage(msg.chatMessage, msg.nickname, date);
     io.emit('message', `${date} - ${msg.nickname}: ${msg.chatMessage}`);
+  });
+  socket.on('nickname', (nickname) => {
+    onlineUsers.push({ nickname, id: socket.id });
+    io.emit('onlineUsers', onlineUsers);
+  });
+  socket.on('updateNickname', (newNick, oldNick) => {
+    const userIndex = onlineUsers.findIndex((user) => user.nickname === oldNick);
+    onlineUsers.splice(userIndex, 1, { nickname: newNick, id: socket.id });
+    io.emit('newNick', onlineUsers);
+  });
+});
+
+io.on('connection', (socket) => {
+  socket.on('messagesHistory', async () => {
+    const messages = await chatController.getAllMessages();
+    socket.emit('messagesHistory', messages);
   });
 });
 
@@ -37,6 +52,11 @@ app.set('views', './views');
 
 app.get('/', (req, res) => {
   res.render('index');
+});
+
+app.get('/messages', async (req, res) => {
+  const messages = await chatController.getAllMessages();
+  res.status(200).json(messages);
 });
 
 http.listen(3000, () => {

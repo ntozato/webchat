@@ -9,7 +9,9 @@
   <body>
     <h1>Webchat</h1>
     <form>
-      <p id="onlineUser" data-testid="online-user"></p>
+      <div id="usersList">
+        <ul id="users"></ul>
+      </div>
       <input
         type="text"
         id="nicknameInput"
@@ -32,17 +34,26 @@
     <ul id="ulMessages"></ul>
     <script>
       const socket = io();
+
+      socket.emit("messagesHistory");
+
       const nicknameButton = document.querySelector("#nicknameButton");
       const sendButton = document.querySelector("#sendButton");
       const messageInput = document.querySelector("#messageInput");
       const nicknameInput = document.querySelector("#nicknameInput");
       const userNameTag = document.querySelector("#onlineUser");
+      const nickname =
+        Math.random().toString(16).substr(2, 8) +
+        Math.random().toString(16).substr(2, 8);
 
-      userNameTag.innerText = sessionStorage.getItem("nickname");
+      sessionStorage.setItem("nickname", nickname);
 
       nicknameButton.addEventListener("click", () => {
+        const nicknameInput = document.querySelector("#nicknameInput");
+        const newNick = nicknameInput.value;
+        const oldNick = sessionStorage.getItem("nickname");
+        socket.emit("updateNickname", newNick, oldNick);
         sessionStorage.setItem("nickname", nicknameInput.value);
-        userNameTag.innerText = sessionStorage.getItem("nickname");
         nicknameInput.value = "";
       });
 
@@ -63,11 +74,41 @@
         ul.appendChild(li);
       };
 
-      socket.on("randomNickname", (msg) => {
-        userNameTag.innerText = msg;
-        sessionStorage.setItem("nickname", msg);
-      });
+      const createOnlineUsers = (users) => {
+        const ul = document.querySelector("#users");
+        ul.innerHTML = "";
+        const li = document.createElement("li");
+        li.setAttribute("data-testid", "online-user");
+        li.innerText = sessionStorage.getItem("nickname");
+        ul.appendChild(li);
+        users.forEach((user) => {
+          if (socket.id !== user.id) {
+            const li = document.createElement("li");
+            li.setAttribute("data-testid", "online-user");
+            li.innerText = user.nickname;
+            ul.appendChild(li);
+          }
+        });
+      };
+
+      const messagesHistory = (messages) => {
+        const ulMessages = document.querySelector("#ulMessages");
+        messages.forEach(({ message, nickname, timestamp }) => {
+          const formatMessage = `${timestamp} - ${nickname}: ${message}`;
+          const li = document.createElement("li");
+          li.setAttribute("data-testid", "message");
+          li.innerText = formatMessage;
+          ulMessages.appendChild(li);
+        });
+      };
+
+      socket.emit("nickname", nickname);
+
+      socket.on("onlineUsers", (users) => createOnlineUsers(users));
+      socket.on("userDisconnected", (users) => createOnlineUsers(users));
+      socket.on("newNick", (users) => createOnlineUsers(users));
       socket.on("message", (msg) => createMessage(msg));
+      socket.on("messagesHistory", (messages) => messagesHistory(messages));
     </script>
   </body>
 </html>
