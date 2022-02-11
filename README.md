@@ -53,3 +53,4 @@ DB_NAME=webchat                             // nome do database
 ```
 
 **Após feitas as configurações anteriores, inicie o projeto com npm start no terminal e localhost:3000 no navegador**
+
